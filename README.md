@@ -5,4 +5,4 @@
 ### Oprating Systems Course
 
 ### Download:
-    https://github.com/oradbarel/C-Multi-Threaded-Server-Client.git
+    git clone https://github.com/oradbarel/C-Multi-Threaded-Server-Client.git
