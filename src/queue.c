@@ -102,7 +102,6 @@ int queueDequeueSomeElements(Queue queue, int n)
         queueDequeue(queue);
         Close(curr->connfd);
         free(curr);
-        queue->size--;
         drop_num--;
     }
     return 0;
@@ -116,19 +115,3 @@ ConnVar queueFront(Queue queue)
     }
     return queue->array[queue->front];
 }
-
-/*
-ConnVar getOldestElement(Queue queue)
-{
-    if(queue == NULL || queue->size <= 0)
-    {
-        return NULL;
-    }
-    int curr = queue->front;
-    while (curr != queue->rear)
-    {
-        
-    }
-    
-
-}*/

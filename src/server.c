@@ -27,7 +27,8 @@
         *ADDR = SCHEDALG_ERROR;
 
 /** ENUM schedalg(10,11,12,13,14):
- *  Used for replacing the string representing the overloading argument */
+ *  Used for replacing the string representing the overloading argument 
+ */
 typedef enum
 {
     BLOCK = 10,
@@ -50,11 +51,11 @@ int handaled_num = 0;
 //=========================
 
 int ceilVal(double num) {
-    int inum = (int)num;
-    if (num == (double)inum) {
-        return inum;
+    int lower_val = (int)num;
+    if (num > (double)lower_val) {
+        return lower_val + 1;
     }
-    return inum + 1;
+    return lower_val;
 }
 
 /**
@@ -84,8 +85,14 @@ void getargs(int *port, int *threads, int *queue_size, schedalg *sched_alg, int 
  */
 void *treadRequestHandle(void *thread_id)
 {
-    Stats thread_stats;
-    thread_stats->thread_id = *thread_id;
+    Stats thread_stats = malloc(sizeof(*thread_stats));
+    if (!thread_stats)
+    {
+        fprintf(stderr, "ERROR: memory not allocated");
+        exit(1);
+    }
+    int *id = thread_id;
+    thread_stats->thread_id = *id;
     thread_stats->thread_dynamic_req_count = thread_stats->thread_static_req_count = thread_stats->thread_req_count = 0;
     while (1)
     {
@@ -95,7 +102,6 @@ void *treadRequestHandle(void *thread_id)
         {
             pthread_cond_wait(&working_cond, &lock);
         }
-        //fprintf(stderr, "queue is not empty\n"); // debug
         waiting_queue_size--;
         handaled_num++;
         ConnVar curr = queueFront(waiting_queue);
@@ -104,18 +110,16 @@ void *treadRequestHandle(void *thread_id)
         pthread_mutex_unlock(&lock);
         //===== exit from critical code.
 
-        //fprintf(stderr, "now thread is tring to hanldle\n"); // debug
         requestHandle(curr, thread_stats);
         Close(curr->connfd);
         free(curr); // queueDequeue does not free the node.
 
         pthread_mutex_lock(&lock);
         handaled_num--;
-        pthread_cond_signal(&main_cond); //TODO: waik main thread, if waits for thus cond.
+        pthread_cond_signal(&main_cond); // waik main thread, if waits for this cond.
         pthread_mutex_unlock(&lock);
-        //fprintf(stderr, "thread goes to next iteration\n"); // debug
-        thread_all_requests++;
     }
+    free(thread_stats);
     return NULL;
 }
 
@@ -127,60 +131,13 @@ int main(int argc, char *argv[])
     int threads_num, queue_size;
     schedalg sched_alg;
     getargs(&port, &threads_num, &queue_size, &sched_alg, argc, argv);
-    // fprintf(stderr, "port: %d, threads_num: %d, queue_size: %d, schedalg: %s\n", port, threads_num, queue_size, schedalg); // DEBUG: check args:
-    /*
-    //DEBUG:
-    ConnVar vars = malloc(4 * sizeof(*vars));
-    for (int i = 0; i < 4; i++)
-    {
-        vars[i].connfd = i;
-        vars[i].enter_time.tv_sec = vars[i].enter_time.tv_usec = i * 2;
-        vars[i].leave_time.tv_sec = vars[i].leave_time.tv_usec = i * 10;
-    }
-    Queue my_queue = createQueue(3);
-    if (!my_queue)
-    {
-        fprintf(stderr, "malloc error\n");
-    }
-    fprintf(stderr, "here\n");
-    ConnVar tmp;
-    queueEnqueue(my_queue, &vars[0]);
-    tmp = queueFront(my_queue);
-    fprintf(stderr, "var 1: %d\n", tmp->connfd);
-    queueEnqueue(my_queue, &vars[1]);
-    queueEnqueue(my_queue, &vars[2]);
-    queueDequeue(my_queue);
-    tmp = queueFront(my_queue);
-    fprintf(stderr, "var 2: %d\n", tmp->connfd);
-    queueDequeue(my_queue);
-    tmp = queueFront(my_queue);
-    fprintf(stderr, "var 3: %d\n", tmp->connfd);
-    queueEnqueue(my_queue, &vars[3]);
-    queueDequeue(my_queue);
-    tmp = queueFront(my_queue);
-    fprintf(stderr, "var 4: %d\n", tmp->connfd);
-    */
 
-    //
-    // HW3: Create some threads...
-    //
-
-    //==================== TODO: create queue(of integers) for requests waiting  to be picked up by a worker thread.
     waiting_queue = createQueue(queue_size);
     if (!waiting_queue)
     {
         fprintf(stderr, "ERROR: memory not allocated");
         exit(1);
     }
-
-    /*
-    //==================== TODO: create queue(of integers) for requests currently handled by some worker thread.
-    handled_queue = createQueue(queue_size);
-    if (!handled_queue)
-    {
-        fprintf(stderr, "ERROR: memory not allocated");
-        exit(1);
-    }*/
 
     //====================initialize cond and mutex:
     pthread_mutex_init(&lock, NULL);
@@ -195,10 +152,17 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    //==================== TODO: run threads:
+    int* threads_id = malloc(sizeof(*threads_id) * threads_num);
+    if (!threads_id)
+    {
+        fprintf(stderr, "ERROR: memory not allocated");
+        exit(1);
+    }
+    //==================== Run threads:
     for (int i = 0; i < threads_num; i++)
     {
-        if (pthread_create(&tid[i], NULL, treadRequestHandle, i) != 0)
+        threads_id[i] = i;
+        if (pthread_create(&tid[i], NULL, treadRequestHandle, &threads_id[i]) != 0)
         {
             fprintf(stderr, "Failed to create thread\n");
         }
@@ -219,22 +183,18 @@ int main(int argc, char *argv[])
         }
         setConVarr(curr, connfd);
 
-        //fprintf(stderr, "main thraed wants to enter critical code\n"); // debug
         //===== enter to critical code:
         pthread_mutex_lock(&lock);
         if (waiting_queue_size + handaled_num >= queue_size)
         {
-            fprintf(stderr, "=== FULL ==="); // TODO: handle...
             switch (sched_alg)
             {
             case BLOCK:
                 //===== main thread blocked until there is an avaiable place in queue:
-                //fprintf(stderr, "main thraed is blockede\n"); // debug
                 while (waiting_queue_size + handaled_num >= queue_size)
                 {
                     pthread_cond_wait(&main_cond, &lock);
                 }
-                //fprintf(stderr, "main thraed adding to queue\n"); // debug
                 queueEnqueue(waiting_queue, curr);
                 waiting_queue_size++;
                 break;
@@ -261,28 +221,11 @@ int main(int argc, char *argv[])
                     queueEnqueue(waiting_queue, curr);
                 }
                 
-                /*
-                ConnVar oldest = queueFront(waiting_queue);
-                if (oldest)
-                {
-                    //===== queue is empty - thus throw this very last requst
-                    Close(curr->connfd);
-                    free(curr);
-                }
-                else
-                {
-                    //===== throw the oldest request and insert the new one.
-                    queueDequeue(waiting_queue);
-                    Close(oldest->connfd);
-                    free(oldest);
-                    queueEnqueue(waiting_queue, curr);
-                }*/
-
                 break;
 
             case RANDOM:
                 //===== main thread throws 30% of requsts and then inserts the new one:
-                if (waiting_queue == 0)
+                if (waiting_queue_size == 0)
                 {
                     //===== queue is empty - thus throw this very last requst
                     Close(curr->connfd);
@@ -290,11 +233,11 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    int drop_num = ceilVal(0.3 * waiting_queue_size); 
+                    int drop_num = ceilVal(0.3 * (double)waiting_queue_size); 
                     queueDequeueSomeElements(waiting_queue, drop_num);
                     waiting_queue_size -= drop_num;
                     queueEnqueue(waiting_queue, curr);
-                    waiting_queue++; 
+                    waiting_queue_size++; 
                 }
                 break;
 
@@ -304,15 +247,14 @@ int main(int argc, char *argv[])
         }
         else
         {
-            //fprintf(stderr, "main thraed adding to queue\n"); // debug
             queueEnqueue(waiting_queue, curr);
             waiting_queue_size++;
         }
         pthread_cond_signal(&working_cond);
         pthread_mutex_unlock(&lock);
         //===== exit critical code.
-        //fprintf(stderr, "main thraed goes to next iteration\n"); // debug
     }
+    free(threads_id);
     destroyQueue(waiting_queue);
     return 0;
 }
