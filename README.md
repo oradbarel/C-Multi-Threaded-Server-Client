@@ -6,7 +6,7 @@
 On the server side, the user selects the following at the beginning of the program run:
 * The port number the server will listen on.
 * The number of worker threads that should be created within the web server (a positive integer).
-* The number of request connections can be accepted at one time. (a positive integer).
+* The number of request connections can be accepted at one time (a positive integer).
 Might be more or less than the threads number.
 * The scheduling algorithm to be performed. Must be one of "block", "dt", "dh", or "random".
 
