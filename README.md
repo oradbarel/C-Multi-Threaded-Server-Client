@@ -23,13 +23,13 @@ On the client side, the user sould run the program with the IP and PORT numbers 
 ## Download:
     git clone https://github.com/oradbarel/C-Multi-Threaded-Server-Client.git
     
-## Compilation:
+## Build:
 Once downloaded, do the following:
 
     cd C-Multi-Threaded-Server-Client
     make
 
-## Running:
+## Run:
 ### On the server side:
 
     ./server [portnum] [threads] [queue_size] [schedalg]
